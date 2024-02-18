@@ -28,6 +28,8 @@ thread_t *current;
 thread_t *next;
 struct queue *runnable_queue;
 
+void ctx_
+
 void thread_init() {
 	// Initialize threading package
 	current = malloc(sizeof(thread_t));
@@ -44,12 +46,12 @@ void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size) {
 
 	next = malloc(sizeof(thread_t));
 	next->func = f;
-	next->arg = arg;
+	next->arg = arg; // When will we run the function?
 	next->sp = malloc(stack_size); // Top of stack
 	next->base = (address_t) &next->sp[stack_size]; // Bottom of stack
 	next->state = RUNNING;
 
-	ctx_start(&current->sp, ???)
+	ctx_start(&current->sp, next->sp) // Recheck for top of stack
 	current = next;
 }
 
