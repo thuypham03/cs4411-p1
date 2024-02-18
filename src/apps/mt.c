@@ -46,9 +46,9 @@ void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size) {
 	next->func = f;
 	next->arg = arg;
 	next->sp = malloc(stack_size); // Top of stack
-	next->base = (address_t) &next->stack[stack_size]; // Bottom of stack
+	next->base = (address_t) &next->sp[stack_size]; // Bottom of stack
 	next->state = RUNNING;
-	
+
 	ctx_start(&current->sp, ???)
 	current = next;
 }
