@@ -1,3 +1,5 @@
+
+
 /* Threads and semaphores in user space.
  */
 
@@ -9,126 +11,127 @@
 #include <egos/context.h>
 #include <earth/earth.h>
 
+void ctx_entry();
 void thread_init();
 void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size);
 void thread_yield();
 void thread_exit();
 
-enum state
+typedef enum state
 {
 	RUNNING,
 	RUNNABLE,
 	TERMINATED,
-};
+} thread_state;
 
 typedef struct thread
 {
-	enum state state;
+	thread_state state;
+	char *sp;
 	address_t base;
 	void (*f)(void *arg);
 	void *arg;
-	char *stack;
-} *thread_t;
+	int id;
+} thread;
 
 typedef struct scheduler
 {
-	thread_t running_thread;
-	struct queue *run_queue;
+	struct queue *runnable_queue;
 	struct queue *terminated_queue;
-} *scheduler_t;
+	thread *running_thread;
+	thread *next_thread;
+} scheduler;
 
-static scheduler_t scheduler;
+static scheduler *master;
+static int thread_id = 0;
 
 void ctx_entry()
 {
-	scheduler->running_thread->f(scheduler->running_thread->arg);
+	if (master->running_thread->base == NULL)
+	{
+		master->running_thread->state = TERMINATED;
+		queue_add(master->terminated_queue, master->running_thread);
+	}
+	else
+	{
+		master->running_thread->state = RUNNABLE;
+		queue_add(master->runnable_queue, master->running_thread);
+	}
+	master->running_thread = master->next_thread;
+	master->next_thread = NULL;
+	master->running_thread->state = RUNNING;
+	(master->running_thread->f)(master->running_thread->arg);
+	thread_exit();
 }
 
 void thread_init()
 {
-	scheduler = malloc(sizeof(struct scheduler));
-	if (scheduler == NULL)
-	{
-		exit(1);
-	}
-
-	thread_t new_thread = malloc(sizeof(struct thread));
-	new_thread->state = RUNNING;
-	new_thread->stack = NULL;
-	new_thread->base = NULL;
-	new_thread->f = NULL;
-	new_thread->arg = NULL;
-
-	struct queue *run_queue = malloc(sizeof(struct queue));
-	if (run_queue == NULL)
-	{
-		exit(1);
-	}
-	queue_init(run_queue);
-
-	struct queue *terminated_queue = malloc(sizeof(struct queue));
-	if (terminated_queue == NULL)
-	{
-		exit(1);
-	}
-
-	scheduler->running_thread = new_thread;
-	scheduler->run_queue = run_queue;
-	scheduler->terminated_queue = terminated_queue;
+	master = malloc(sizeof(scheduler));
+	master->runnable_queue = malloc(sizeof(struct queue));
+	queue_init(master->runnable_queue);
+	master->terminated_queue = malloc(sizeof(struct queue));
+	queue_init(master->terminated_queue);
+	master->running_thread = malloc(sizeof(thread));
+	master->running_thread->state = RUNNING;
+	master->running_thread->base = NULL;
+	master->running_thread->id = thread_id;
 }
 
 void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size)
 {
-	thread_t new_thread = malloc(sizeof(struct thread));
-	if (new_thread == NULL)
-	{
-		exit(1);
-	}
-	new_thread->stack = malloc(stack_size);
-	if (new_thread->stack == NULL)
-	{
-		free(new_thread);
-		exit(1);
-	}
+	thread *new_thread = malloc(sizeof(thread));
 	new_thread->state = RUNNABLE;
-	new_thread->base = (address_t)&new_thread->stack[stack_size];
+	new_thread->sp = malloc(stack_size);
+	new_thread->base = (address_t)&new_thread->sp[stack_size];
 	new_thread->f = f;
 	new_thread->arg = arg;
-
-	// switch to new thread
-	scheduler->running_thread->state = RUNNABLE;
-	queue_add(scheduler->run_queue, scheduler->running_thread);
-	ctx_start(&scheduler->running_thread->base, &new_thread->base);
-	scheduler->running_thread = new_thread;
-};
+	thread_id++;
+	new_thread->id = thread_id;
+	if (master->next_thread != NULL)
+	{
+		queue_insert(master->runnable_queue, master->next_thread);
+	}
+	master->next_thread = new_thread;
+	if (master->running_thread->base == NULL)
+	{
+		ctx_entry();
+	}
+	else
+	{
+		ctx_start(&master->running_thread->base, new_thread->base);
+	}
+}
 
 void thread_yield()
 {
-	if (!queue_empty(scheduler->run_queue))
+	if (master->running_thread->state == TERMINATED)
 	{
-		thread_t next_thread = queue_get(scheduler->run_queue);
-		if (scheduler->running_thread->state != TERMINATED)
-		{
-			scheduler->running_thread->state = RUNNABLE;
-			queue_add(scheduler->run_queue, scheduler->running_thread);
-		}
-		thread_t current_thread = scheduler->running_thread;
-		scheduler->running_thread = next_thread;
-		ctx_switch(&current_thread->base, &next_thread->base);
+		queue_add(master->terminated_queue, master->running_thread);
 	}
-
-	while (!queue_empty(scheduler->terminated_queue))
+	if (master->next_thread != NULL)
 	{
-		thread_t dead_thread = (thread_t)queue_get(scheduler->terminated_queue);
-		free(dead_thread->stack);
-		free(dead_thread);
+		master->running_thread = master->next_thread;
+		master->next_thread = NULL;
 	}
+	else if (!queue_empty(master->runnable_queue))
+	{
+		master->next_thread = (thread *)queue_get(master->runnable_queue);
+	}
+	else
+	{
+		return;
+	}
+	master->running_thread->state = RUNNABLE;
+	queue_add(master->runnable_queue, master->running_thread);
+	ctx_switch(master->running_thread->base, master->next_thread->base);
+	master->running_thread = master->next_thread;
+	master->running_thread->state = RUNNING;
+	master->next_thread = NULL;
 }
 
 void thread_exit()
 {
-	scheduler->running_thread->state = TERMINATED;
-	queue_add(scheduler->terminated_queue, scheduler->running_thread);
+	master->running_thread->state = TERMINATED;
 	thread_yield();
 }
 
@@ -147,8 +150,6 @@ int main(int argc, char **argv)
 {
 	thread_init();
 	thread_create(test_code, "thread 1", 16 * 1024);
-	thread_create(test_code, "thread 1", 16 * 1024);
-	test_code("main thread");
-	// thread_exit();
+	thread_create(test_code, "thread 2", 16 * 1024);
 	return 0;
 }
