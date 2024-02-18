@@ -98,7 +98,7 @@ void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size)
 	}
 	else
 	{
-		ctx_start(&master->running_thread->base, new_thread->base);
+		ctx_start(master->running_thread->base, new_thread->base);
 	}
 }
 
