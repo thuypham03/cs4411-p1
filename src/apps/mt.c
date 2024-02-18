@@ -21,25 +21,19 @@ typedef struct thread {
 	thread_state state;
 } thread_t;
 
-struct package {
-	thread_t *current;
-	thread_t *next;
-	struct queue *runnable_queue;
-} *controller;
-
+thread_t *current;
+thread_t *next;
+struct queue *runnable_queue;
 
 void thread_init() {
 	// Initialize threading package
-	controller = malloc(sizeof(package_t));
-	controller->current = malloc(sizeof(thread_t));
-	controller->runnable_queue = malloc(sizeof(struct queue));
+	current = malloc(sizeof(thread_t));
+	runnable_queue = malloc(sizeof(struct queue));
 
-	controller->current->base = NULL;
-	queue_init(controller->runnable_queue);
+	current->base = NULL;
+	queue_init(runnable_queue);
 }
 
-void thread_create(void (*f)(void *arg), void *arg,
-					unsigned int stack_size);
 void thread_yield();
 void thread_exit();
 
