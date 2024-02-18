@@ -28,8 +28,6 @@ thread_t *current;
 thread_t *next;
 struct queue *runnable_queue;
 
-void ctx_
-
 void thread_init() {
 	// Initialize threading package
 	current = malloc(sizeof(thread_t));
@@ -51,21 +49,44 @@ void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size) {
 	next->base = (address_t) &next->sp[stack_size]; // Bottom of stack
 	next->state = RUNNING;
 
-	ctx_start(&current->sp, next->sp) // Recheck for top of stack
+	// Switch from current to newly created thread (stack top = next->sp)
+	ctx_start(&current->sp, next->sp) // Recheck for Top of stack = next->sp
 	current = next;
 }
 
-void thread_yield();
-void thread_exit();
+void thread_yield() {
+	assert(current->state == RUNNING);
+	if (queue_empty(runnable_queue)) return;
 
-struct sema {
-    // your code here
-};
+	current->state = RUNNABLE;
+	queue_add(runnable_queue, current);
+	next = (thread_t *) queue_get(runnable_queue);
+	next->state = RUNNING;
 
-void sema_init(struct sema *sema, unsigned int count);
-void sema_dec(struct sema *sema);
-void sema_inc(struct sema *sema);
-bool sema_release(struct sema *sema);
+	ctx_switch(&current->sp, next->sp);
+	current = next;
+}
+
+void thread_exit() {
+	if (queue_empty(runnable_queue)) exit(0);
+
+	current->state = TERMINATED;
+	next = (thread_t *) queue_get(runnable_queue);
+	next->state = RUNNING;
+
+	ctx_switch(&current->sp, next->sp);
+	current = next;
+	// Next thread clean up last thread?
+}
+
+// struct sema {
+//     // your code here
+// };
+
+// void sema_init(struct sema *sema, unsigned int count);
+// void sema_dec(struct sema *sema);
+// void sema_inc(struct sema *sema);
+// bool sema_release(struct sema *sema);
 
 /**** TEST SUITE ****/
 
