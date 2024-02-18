@@ -17,7 +17,7 @@ typedef enum state {
 
 typedef struct thread {
 	char *sp;
-    address_t base;
+	address_t base;
 	thread_state state;
 } thread_t;
 
