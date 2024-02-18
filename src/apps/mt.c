@@ -19,6 +19,9 @@ typedef struct thread {
 	char *sp;
 	address_t base;
 	thread_state state;
+
+	void (*func)(void *);
+	void *arg;
 } thread_t;
 
 thread_t *current;
@@ -30,8 +33,24 @@ void thread_init() {
 	current = malloc(sizeof(thread_t));
 	runnable_queue = malloc(sizeof(struct queue));
 
+	next = NULL;
 	current->base = NULL;
 	queue_init(runnable_queue);
+}
+
+void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size) {
+	current->state = RUNNABLE;
+	queue_add(runnable_queue, current);
+
+	next = malloc(sizeof(thread_t));
+	next->func = f;
+	next->arg = arg;
+	next->sp = malloc(stack_size); // Top of stack
+	next->base = (address_t) &next->stack[stack_size]; // Bottom of stack
+	next->state = RUNNING;
+	
+	ctx_start(&current->sp, ???)
+	current = next;
 }
 
 void thread_yield();
