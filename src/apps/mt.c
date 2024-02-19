@@ -50,6 +50,7 @@ void ctx_entry()
 {
 	if (debug) sys_print("ctx_entry()\n");
 
+	master->current = master->next;
 	master->current->state = RUNNING;
 	master->current->f(master->current->arg);
 	thread_exit();
@@ -76,30 +77,23 @@ void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size)
 {
 	if (debug) sys_print("thread_create()\n");
 
-	if (master->current->base != NULL) {
-		master->current->state = RUNNABLE;
-		queue_add(master->runnable_queue, master->current);
-	}
+	master->current->state = RUNNABLE;
+	queue_add(master->runnable_queue, master->current);
 
 	master->next = malloc(sizeof(thread_t));
 	master->next->f = f;
-	master->next->arg = arg;															 
-	master->next->base = malloc(stack_size);
-	master->next->sp = (address_t) &master->next->base[stack_size];
+	master->next->arg = arg;	
+	master->next->base = malloc(stack_size);											 
+	master->next->sp = &master->next->base[stack_size];
 	master->next->state = RUNNING;
 
 	thread_id_counter++;
 	master->next->id = thread_id_counter;
 
-	if (master->current->base == NULL) {
-		master->current = master->next;
-		ctx_entry();
-	} else {
-		// Switch from current to newly created thread (stack top = next->sp)
-		if (debug) sys_print("ctx_start()\n");
-		ctx_start(&master->current->sp, master->next->sp);
-		master->current = master->next;
-	}
+	// Switch from current to newly created thread (stack top = next->sp)
+	if (debug) sys_print("ctx_start()\n");
+	ctx_start(&master->current->sp, master->next->sp);
+	master->current = master->next;
 }
 
 void thread_yield()
