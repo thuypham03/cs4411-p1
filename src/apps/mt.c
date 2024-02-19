@@ -7,6 +7,13 @@
 #include <string.h>
 #include <egos/queue.h>
 #include <egos/context.h>
+#include <earth/earth.h>
+
+void ctx_entry();
+void thread_init();
+void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size);
+void thread_yield();
+void thread_exit();
 
 /**** THREADS AND SEMAPHORES ****/
 typedef enum state
@@ -18,90 +25,110 @@ typedef enum state
 
 typedef struct thread
 {
-	char *sp;
-	address_t base;
+	int id;
+	address_t sp;
+	char *base;
 	thread_state state;
 
-	void (*func)(void *);
+	void (*f)(void *arg);
 	void *arg;
 } thread_t;
 
-thread_t *current;
-thread_t *next;
-struct queue *runnable_queue;
+typedef struct scheduler
+{
+	thread_t *current;
+	thread_t *next;
+	struct queue *runnable_queue;
+	struct queue *terminated_queue;
+} scheduler;
 
-void ctx_entry() {}
+static scheduler *master;
+static int thread_id_counter = 0;
+static int debug = 0;
+
+void ctx_entry()
+{
+	if (debug) sys_print("ctx_entry()\n");
+
+	master->current->state = RUNNING;
+	master->current->f(master->current->arg);
+	thread_exit();
+}
 
 void thread_init()
 {
-	// Initialize threading package
-	current = malloc(sizeof(thread_t));
-	runnable_queue = malloc(sizeof(struct queue));
+	if (debug) sys_print("thread_init()\n");
 
-	next = NULL;
-	current->base = NULL;
-	queue_init(runnable_queue);
+	// Initialize threading package
+	master = malloc(sizeof(scheduler));
+	master->runnable_queue = malloc(sizeof(struct queue));
+	queue_init(master->runnable_queue);
+	master->terminated_queue = malloc(sizeof(struct queue));
+	queue_init(master->terminated_queue);
+
+	master->current = malloc(sizeof(thread_t));
+	master->current->base = NULL;
+	master->current->id = thread_id_counter;
+	master->next = NULL;
 }
 
 void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size)
 {
-	current->state = RUNNABLE;
-	queue_add(runnable_queue, current);
+	if (debug) sys_print("thread_create()\n");
 
-	next = malloc(sizeof(thread_t));
-	next->func = f;
-	next->arg = arg;															 // When will we run the function?
-	next->sp = malloc(stack_size);								 // Top of stack
-	next->base = (address_t)&next->sp[stack_size]; // Bottom of stack
-	next->state = RUNNING;
+	master->current->state = RUNNABLE;
+	queue_add(master->runnable_queue, master->current);
 
+	master->next = malloc(sizeof(thread_t));
+	master->next->f = f;
+	master->next->arg = arg;															 
+	master->next->base = malloc(stack_size);
+	master->next->sp = (address_t) &master->next->base[stack_size];
+	master->next->state = RUNNING;
+
+	thread_id_counter++;
+	master->next->id = thread_id_counter;
+	
 	// Switch from current to newly created thread (stack top = next->sp)
-	ctx_start(&current->sp, next->sp); // Recheck for Top of stack = next->sp
-	current = next;
+	ctx_start(&master->current->sp, master->next->sp); // Recheck for Top of stack = next->sp
+	master->current = master->next;
 }
 
 void thread_yield()
 {
-	assert(current->state == RUNNING);
-	if (queue_empty(runnable_queue))
+	assert(master->current->state == RUNNING);
+	if (queue_empty(master->runnable_queue))
 		return;
 
-	current->state = RUNNABLE;
-	queue_add(runnable_queue, current);
-	next = (thread_t *)queue_get(runnable_queue);
-	next->state = RUNNING;
+	master->current->state = RUNNABLE;
+	queue_add(master->runnable_queue, master->current);
+	master->next = (thread_t *)queue_get(master->runnable_queue);
+	master->next->state = RUNNING;
 
-	ctx_switch(&current->sp, next->sp);
-	current = next;
+	ctx_switch(&master->current->sp, master->next->sp);
+	master->current = master->next;
 }
 
 void thread_exit()
 {
-	if (queue_empty(runnable_queue))
-		exit(0);
+	if (queue_empty(master->runnable_queue)) exit(0);
 
-	current->state = TERMINATED;
-	next = (thread_t *)queue_get(runnable_queue);
-	next->state = RUNNING;
+	master->current->state = TERMINATED;
+	queue_add(master->terminated_queue, master->current);
 
-	ctx_switch(&current->sp, next->sp);
-	current = next;
+	master->next = (thread_t *) queue_get(master->runnable_queue);
+	master->next->state = RUNNING;
+
+	ctx_switch(&master->current->sp, master->next->sp);
+	master->current = master->next;
+
 	// Next thread clean up last thread?
+	while (!queue_empty(master->terminated_queue)) {
+		thread_t *terminated_thread = (thread_t *) queue_get(master->terminated_queue);
+		free((void *) terminated_thread->sp);
+		free((void *) terminated_thread);
+	}
 }
-
-// struct sema {
-//     // your code here
-// };
-
-// void sema_init(struct sema *sema, unsigned int count);
-// void sema_dec(struct sema *sema);
-// void sema_inc(struct sema *sema);
-// bool sema_release(struct sema *sema);
-
-/**** TEST SUITE ****/
-
-// your test code here, such as producer/consumer, read/write locks
-// dining philosophers and barber shop
 
 static void test_code(void *arg)
 {
