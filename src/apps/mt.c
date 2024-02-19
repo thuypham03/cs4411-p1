@@ -22,6 +22,7 @@ typedef enum state
 	READY,
 	RUNNING,
 	RUNNABLE,
+	BLOCKED,
 	FINISHED,
 } thread_state;
 
@@ -157,6 +158,63 @@ void thread_exit()
 	}
 	master->running_thread->state = FINISHED;
 	thread_yield();
+}
+
+typedef struct sema
+{
+	struct queue *thread_queue;
+	unsigned int count;
+} sema;
+
+void sema_init(sema *sema, unsigned int count);
+void sema_dec(sema *sema);
+void sema_inc(sema *sema);
+bool sema_release(sema *sema);
+
+void sema_init(sema *sema, unsigned int count)
+{
+	sema->count = count;
+	sema->thread_queue = malloc(sizeof(struct queue));
+	queue_init(sema->thread_queue);
+}
+
+void sema_dec(sema *sema)
+{
+	if (sema->count == 0)
+	{
+		master->running_thread->state = BLOCKED;
+		queue_add(sema->thread_queue, master->running_thread);
+		thread_yield();
+	}
+	else
+	{
+		sema->count--;
+	}
+}
+
+void sema_inc(sema *sema)
+{
+	if (!queue_empty(sema->thread_queue))
+	{
+		thread *waiting_thread = (thread *)queue_get(sema->thread_queue);
+		waiting_thread->state = RUNNABLE;
+		queue_add(master->runnable_queue, waiting_thread);
+	}
+	else
+	{
+		sema->count++;
+	}
+}
+
+bool sema_release(sema *sema)
+{
+	if (queue_empty(sema->thread_queue))
+	{
+		free(sema->thread_queue);
+		free(sema);
+		return true;
+	}
+	return false;
 }
 
 static void test_code(void *arg)
