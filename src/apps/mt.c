@@ -20,6 +20,7 @@ typedef enum state
 {
 	RUNNABLE,
 	RUNNING,
+	BLOCKED,
 	TERMINATED
 } thread_state;
 
@@ -94,11 +95,12 @@ void thread_yield()
 {
 	if (debug) sys_print("thread_yield()\n");
 
-	assert(master->current->state == RUNNING);
 	if (queue_empty(master->runnable_queue)) return;
+	if (master->current->state == RUNNING) {
+		master->current->state = RUNNABLE;
+		queue_add(master->runnable_queue, master->current);
+	}
 
-	master->current->state = RUNNABLE;
-	queue_add(master->runnable_queue, master->current);
 	master->next = (thread_t *) queue_get(master->runnable_queue);
 	master->next->state = RUNNING;
 
@@ -130,24 +132,120 @@ void thread_exit()
 	}
 }
 
-/**** TEST SUITE ****/
-static void test_code(void *arg)
-{
-	int i;
-	for (i = 0; i < 10; i++)
-	{
-		printf("%s here: %d\n", arg, i);
-		thread_yield();
-	}
-	printf("%s done\n", arg);
+typedef struct sema {
+	unsigned int count;
+	struct queue *waiting_queue;
+} sema_t;
+
+void sema_init(struct sema *sema, unsigned int count) {
+	sema->count = count;
+	sema->waiting_queue = malloc(sizeof(struct queue));
+	queue_init(sema->waiting_queue);
 }
 
-int main(int argc, char **argv)
-{
+void sema_dec(struct sema *sema) {
+	if (sema->count > 0) {
+		sema->count--;
+		return;
+	}
+
+    // Block the thread and add it to the semaphore's wait queue
+	master->current->state = BLOCKED;
+	queue_add(sema->waiting_queue, master->current);
+	thread_yield();
+}
+
+void sema_inc(struct sema *sema) {
+	if (!queue_empty(sema->waiting_queue)) {
+        // Unblock a thread from the wait queue
+		thread_t *unblock_thread = (thread_t *) queue_get(sema->waiting_queue);
+		unblock_thread->state = RUNNABLE;
+		queue_add(master->runnable_queue, unblock_thread);
+	} else sema->count++;
+}
+
+bool sema_release(struct sema *sema) {
+	if (queue_empty(sema->waiting_queue)) {
+        queue_release(sema->waiting_queue); 
+        return true;
+    }
+    return false;
+}
+
+/**** TEST SUITE ****/
+// static void test_code(void *arg)
+// {
+// 	int i;
+// 	for (i = 0; i < 10; i++)
+// 	{
+// 		printf("%s here: %d\n", arg, i);
+// 		thread_yield();
+// 	}
+// 	printf("%s done\n", arg);
+// }
+
+// int main(int argc, char **argv)
+// {
+// 	thread_init();
+// 	thread_create(test_code, "thread 1", 16 * 1024);
+// 	thread_create(test_code, "thread 2", 16 * 1024);
+// 	test_code("main thread");
+// 	thread_exit();
+// 	return 0;
+// }
+
+#define NSLOTS 3
+
+static struct sema s_empty, s_full, s_lock;
+static unsigned int in, out;
+static char *slots[NSLOTS];
+
+static void producer(void *arg){
+	for (;;) {
+		// first make sure there’s an empty slot.
+		sema_dec(&s_empty);
+
+		// now add an entry to the queue
+		sema_dec(&s_lock);
+		slots[in++] = arg;
+		if (in == NSLOTS) in = 0;
+		printf("%s put\n", arg);
+		sema_inc(&s_lock);
+
+		// finally, signal consumers
+		sema_inc(&s_full);
+	}
+}
+
+static void consumer(void *arg){
+	unsigned int i;
+	for (i = 0; i < 5; i++) {
+		// first make sure there’s something in the buffer
+		sema_dec(&s_full);
+
+		// now grab an entry to the queue
+		sema_dec(&s_lock);
+		void *x = slots[out++];
+		printf("%s: got %s\n", arg, x);
+		if (out == NSLOTS) out = 0;
+		sema_inc(&s_lock);
+
+		// finally, signal producers
+		sema_inc(&s_empty);
+	}
+}
+
+int main(int argc, char **argv){
 	thread_init();
-	thread_create(test_code, "thread 1", 16 * 1024);
-	thread_create(test_code, "thread 2", 16 * 1024);
-	test_code("main thread");
+	sema_init(&s_lock, 1);
+	sema_init(&s_full, 0);
+	sema_init(&s_empty, NSLOTS);
+
+	thread_create(consumer, "consumer 1", 16 * 1024);
+	thread_create(consumer, "consumer 2", 16 * 1024);
+	producer("producer 1");
+	producer("producer 2");
+	// Code should never reach here since producer is an infinite loop
 	thread_exit();
 	return 0;
 }
