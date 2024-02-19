@@ -44,7 +44,7 @@ typedef struct scheduler
 
 static scheduler *master;
 static int thread_id_counter = 0;
-static int debug = 0;
+static int debug = 1;
 
 void ctx_entry()
 {
@@ -76,25 +76,27 @@ void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size)
 {
 	if (debug) sys_print("thread_create()\n");
 
-	master->current->state = RUNNABLE;
-	queue_add(master->runnable_queue, master->current);
+	if (master->current->state == RUNNING) {
+		master->current->state = RUNNABLE;
+		queue_add(master->runnable_queue, master->current);
+	}
 
 	master->next = malloc(sizeof(thread_t));
 	master->next->f = f;
 	master->next->arg = arg;															 
 	master->next->base = malloc(stack_size);
-	// master->next->sp = (address_t) &master->next->base[stack_size];
-	master->next->sp = (address_t) (master->next->base + stack_size - sizeof(address_t));
+	master->next->sp = (address_t) &master->next->base[stack_size];
 	master->next->state = RUNNING;
 
 	thread_id_counter++;
 	master->next->id = thread_id_counter;
 	
-	if (master->current->base == NULL) {
+	if (master->current->id == 0) { // Haven't start any thread yet (initial state)
 		master->current = master->next;
 		ctx_entry();
 	} else {
 		// Switch from current to newly created thread (stack top = next->sp)
+		if (debug) sys_print("ctx_start()\n");
 		ctx_start(&master->current->sp, master->next->sp);
 		master->current = master->next;
 	}
@@ -102,21 +104,25 @@ void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size)
 
 void thread_yield()
 {
+	if (debug) sys_print("thread_yield()\n");
+
 	assert(master->current->state == RUNNING);
 	if (queue_empty(master->runnable_queue))
 		return;
 
 	master->current->state = RUNNABLE;
 	queue_add(master->runnable_queue, master->current);
-	master->next = (thread_t *)queue_get(master->runnable_queue);
+	master->next = (thread_t *) queue_get(master->runnable_queue);
 	master->next->state = RUNNING;
 
+	if (debug) sys_print("ctx_switch()\n");
 	ctx_switch(&master->current->sp, master->next->sp);
 	master->current = master->next;
 }
 
 void thread_exit()
 {
+	if (debug) sys_print("thread_exit()\n");
 	if (queue_empty(master->runnable_queue)) exit(0);
 
 	master->current->state = TERMINATED;
@@ -125,6 +131,7 @@ void thread_exit()
 	master->next = (thread_t *) queue_get(master->runnable_queue);
 	master->next->state = RUNNING;
 
+	if (debug) sys_print("ctx_switch()\n");
 	ctx_switch(&master->current->sp, master->next->sp);
 	master->current = master->next;
 
