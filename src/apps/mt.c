@@ -18,14 +18,13 @@ void thread_exit();
 /**** THREADS AND SEMAPHORES ****/
 typedef enum state
 {
-	RUNNING,
 	RUNNABLE,
+	RUNNING,
 	TERMINATED
 } thread_state;
 
 typedef struct thread
 {
-	int id;
 	address_t sp;
 	char *base;
 	thread_state state;
@@ -82,7 +81,7 @@ void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size)
 	master->next->f = f;
 	master->next->arg = arg;	
 	master->next->base = malloc(stack_size);											 
-	master->next->sp = &master->next->base[stack_size];
+	master->next->sp = (address_t) &master->next->base[stack_size];
 	master->next->state = RUNNING;
 
 	// Switch from current to newly created thread (stack top = next->sp)
@@ -131,6 +130,7 @@ void thread_exit()
 	}
 }
 
+/**** TEST SUITE ****/
 static void test_code(void *arg)
 {
 	int i;
