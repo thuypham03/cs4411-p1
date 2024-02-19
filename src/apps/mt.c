@@ -19,9 +19,10 @@ void thread_exit();
 
 typedef enum state
 {
+	READY,
 	RUNNING,
 	RUNNABLE,
-	TERMINATED,
+	FINISHED,
 } thread_state;
 
 typedef struct thread
@@ -39,33 +40,29 @@ typedef struct scheduler
 	struct queue *runnable_queue;
 	struct queue *terminated_queue;
 	thread *running_thread;
-	thread *next_thread;
 } scheduler;
 
 static scheduler *master;
 static int thread_id = 0;
 
+static int debug = 0;
+
 void ctx_entry()
 {
-	if (master->running_thread->base == NULL)
+	if (debug)
 	{
-		master->running_thread->state = TERMINATED;
-		queue_add(master->terminated_queue, master->running_thread);
+		sys_print("ctx_entry()\n");
 	}
-	else
-	{
-		master->running_thread->state = RUNNABLE;
-		queue_add(master->runnable_queue, master->running_thread);
-	}
-	master->running_thread = master->next_thread;
-	master->next_thread = NULL;
-	master->running_thread->state = RUNNING;
-	(master->running_thread->f)(master->running_thread->arg);
+	master->running_thread->f(master->running_thread->arg);
 	thread_exit();
 }
 
 void thread_init()
 {
+	if (debug)
+	{
+		sys_print("thread_init()\n");
+	}
 	master = malloc(sizeof(scheduler));
 	master->runnable_queue = malloc(sizeof(struct queue));
 	queue_init(master->runnable_queue);
@@ -79,59 +76,73 @@ void thread_init()
 
 void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size)
 {
+	if (debug)
+	{
+		sys_print("thread_create()\n");
+	}
 	thread *new_thread = malloc(sizeof(thread));
-	new_thread->state = RUNNABLE;
+	new_thread->state = READY;
 	new_thread->sp = malloc(stack_size);
 	new_thread->base = (address_t)&new_thread->sp[stack_size];
 	new_thread->f = f;
 	new_thread->arg = arg;
 	thread_id++;
 	new_thread->id = thread_id;
-	if (master->next_thread != NULL)
-	{
-		queue_insert(master->runnable_queue, master->next_thread);
-	}
-	master->next_thread = new_thread;
-	if (master->running_thread->base == NULL)
-	{
-		ctx_entry();
-	}
-	else
-	{
-		ctx_start(master->running_thread->base, new_thread->base);
-	}
+	queue_add(master->runnable_queue, new_thread);
 }
 
 void thread_yield()
 {
-	if (master->running_thread->state == TERMINATED)
+	if (debug)
 	{
-		queue_add(master->terminated_queue, master->running_thread);
+		sys_print("thread_yield()\n");
 	}
-	if (master->next_thread != NULL)
+	thread *current_thread = master->running_thread;
+	if (!queue_empty(master->runnable_queue))
 	{
-		master->running_thread = master->next_thread;
-		master->next_thread = NULL;
+		thread *next_thread = (thread *)queue_get(master->runnable_queue);
+		if (current_thread->state == FINISHED)
+		{
+			queue_add(master->terminated_queue, current_thread);
+		}
+		else
+		{
+			queue_add(master->runnable_queue, current_thread);
+		}
+		master->running_thread = next_thread;
+		if (next_thread->state == READY)
+		{
+			if (current_thread->base != NULL)
+			{
+				ctx_start(&current_thread->base, next_thread->base);
+			}
+			else
+			{
+				ctx_entry();
+			}
+		}
+		else
+		{
+			ctx_switch(&current_thread->base, next_thread->base);
+		}
+
+		while (!queue_empty(master->terminated_queue))
+		{
+			thread *terminated_thread = (thread *)queue_get(master->terminated_queue);
+			free(terminated_thread->sp);
+			free(terminated_thread);
+		}
+		master->running_thread->state = RUNNING;
 	}
-	else if (!queue_empty(master->runnable_queue))
-	{
-		master->next_thread = (thread *)queue_get(master->runnable_queue);
-	}
-	else
-	{
-		return;
-	}
-	master->running_thread->state = RUNNABLE;
-	queue_add(master->runnable_queue, master->running_thread);
-	ctx_switch(master->running_thread->base, master->next_thread->base);
-	master->running_thread = master->next_thread;
-	master->running_thread->state = RUNNING;
-	master->next_thread = NULL;
 }
 
 void thread_exit()
 {
-	master->running_thread->state = TERMINATED;
+	if (debug)
+	{
+		sys_print("thread_exit()\n");
+	}
+	master->running_thread->state = FINISHED;
 	thread_yield();
 }
 
@@ -151,5 +162,6 @@ int main(int argc, char **argv)
 	thread_init();
 	thread_create(test_code, "thread 1", 16 * 1024);
 	thread_create(test_code, "thread 2", 16 * 1024);
+	thread_exit();
 	return 0;
 }
