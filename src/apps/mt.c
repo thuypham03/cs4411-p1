@@ -44,7 +44,7 @@ typedef struct scheduler
 
 static scheduler *master;
 static int thread_id_counter = 0;
-static int debug = 1;
+static int debug = 0;
 
 void ctx_entry()
 {
@@ -76,7 +76,7 @@ void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size)
 {
 	if (debug) sys_print("thread_create()\n");
 
-	if (master->current->state == RUNNING) {
+	if (master->current->base != NULL) {
 		master->current->state = RUNNABLE;
 		queue_add(master->runnable_queue, master->current);
 	}
@@ -90,8 +90,8 @@ void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size)
 
 	thread_id_counter++;
 	master->next->id = thread_id_counter;
-	
-	if (master->current->id == 0) { // Haven't start any thread yet (initial state)
+
+	if (master->current->base == NULL) {
 		master->current = master->next;
 		ctx_entry();
 	} else {
@@ -107,8 +107,7 @@ void thread_yield()
 	if (debug) sys_print("thread_yield()\n");
 
 	assert(master->current->state == RUNNING);
-	if (queue_empty(master->runnable_queue))
-		return;
+	if (queue_empty(master->runnable_queue)) return;
 
 	master->current->state = RUNNABLE;
 	queue_add(master->runnable_queue, master->current);
