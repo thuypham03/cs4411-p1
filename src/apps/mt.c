@@ -28,8 +28,8 @@ typedef enum state
 typedef struct thread
 {
 	thread_state state;
-	char *sp;
-	address_t base;
+	address_t sp;
+	char *base;
 	void (*f)(void *arg);
 	void *arg;
 	int id;
@@ -83,8 +83,8 @@ void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size)
 	}
 	thread *new_thread = malloc(sizeof(thread));
 	new_thread->state = READY;
-	new_thread->sp = malloc(stack_size);
-	new_thread->base = (address_t)&new_thread->sp[stack_size];
+	new_thread->base = malloc(stack_size);
+	new_thread->sp = (address_t)&new_thread->base[stack_size];
 	new_thread->f = f;
 	new_thread->arg = arg;
 	thread_id++;
@@ -99,41 +99,52 @@ void thread_yield()
 		sys_print("thread_yield()\n");
 	}
 	thread *current_thread = master->running_thread;
+	if (current_thread->state == FINISHED)
+	{
+		queue_add(master->terminated_queue, current_thread);
+	}
+	else
+	{
+		queue_add(master->runnable_queue, current_thread);
+	}
+	while (!queue_empty(master->terminated_queue))
+	{
+		thread *terminated_thread = (thread *)queue_get(master->terminated_queue);
+		free(terminated_thread->sp);
+		free(terminated_thread);
+	}
 	if (!queue_empty(master->runnable_queue))
 	{
 		thread *next_thread = (thread *)queue_get(master->runnable_queue);
-		if (current_thread->state == FINISHED)
-		{
-			queue_add(master->terminated_queue, current_thread);
-		}
-		else
-		{
-			queue_add(master->runnable_queue, current_thread);
-		}
 		master->running_thread = next_thread;
 		if (next_thread->state == READY)
 		{
 			if (current_thread->base != NULL)
 			{
-				ctx_start(&current_thread->base, next_thread->base);
+				if (debug)
+				{
+					sys_print("ctx_start()\n");
+				}
+				ctx_start(&current_thread->sp, next_thread->sp);
 				master->running_thread->state = RUNNING;
 			}
 			else
 			{
+				if (debug)
+				{
+					sys_print("ctx_entry()\n");
+				}
 				ctx_entry();
 			}
 		}
 		else
 		{
-			ctx_switch(&current_thread->base, next_thread->base);
+			if (debug)
+			{
+				sys_print("ctx_switch()\n");
+			}
+			ctx_switch(&current_thread->sp, next_thread->sp);
 			master->running_thread->state = RUNNING;
-		}
-
-		while (!queue_empty(master->terminated_queue))
-		{
-			thread *terminated_thread = (thread *)queue_get(master->terminated_queue);
-			free(terminated_thread->sp);
-			free(terminated_thread);
 		}
 	}
 }
