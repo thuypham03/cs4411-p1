@@ -83,15 +83,21 @@ void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size)
 	master->next->f = f;
 	master->next->arg = arg;															 
 	master->next->base = malloc(stack_size);
-	master->next->sp = (address_t) &master->next->base[stack_size];
+	// master->next->sp = (address_t) &master->next->base[stack_size];
+	master->next->sp = (address_t) (master->next->base + stack_size - sizeof(address_t));
 	master->next->state = RUNNING;
 
 	thread_id_counter++;
 	master->next->id = thread_id_counter;
 	
-	// Switch from current to newly created thread (stack top = next->sp)
-	ctx_start(&master->current->sp, master->next->sp); // Recheck for Top of stack = next->sp
-	master->current = master->next;
+	if (master->current->base == NULL) {
+		master->current = master->next;
+		ctx_entry();
+	} else {
+		// Switch from current to newly created thread (stack top = next->sp)
+		ctx_start(&master->current->sp, master->next->sp);
+		master->current = master->next;
+	}
 }
 
 void thread_yield()
@@ -125,7 +131,7 @@ void thread_exit()
 	// Next thread clean up last thread?
 	while (!queue_empty(master->terminated_queue)) {
 		thread_t *terminated_thread = (thread_t *) queue_get(master->terminated_queue);
-		free((void *) terminated_thread->sp);
+		free(terminated_thread->base);		
 		free((void *) terminated_thread);
 	}
 }
