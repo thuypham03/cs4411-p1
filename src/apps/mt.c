@@ -53,6 +53,7 @@ void ctx_entry()
 	{
 		sys_print("ctx_entry()\n");
 	}
+	master->running_thread->state = RUNNING;
 	master->running_thread->f(master->running_thread->arg);
 	thread_exit();
 }
@@ -115,6 +116,7 @@ void thread_yield()
 			if (current_thread->base != NULL)
 			{
 				ctx_start(&current_thread->base, next_thread->base);
+				master->running_thread->state = RUNNING;
 			}
 			else
 			{
@@ -124,6 +126,7 @@ void thread_yield()
 		else
 		{
 			ctx_switch(&current_thread->base, next_thread->base);
+			master->running_thread->state = RUNNING;
 		}
 
 		while (!queue_empty(master->terminated_queue))
@@ -132,7 +135,6 @@ void thread_yield()
 			free(terminated_thread->sp);
 			free(terminated_thread);
 		}
-		master->running_thread->state = RUNNING;
 	}
 }
 
