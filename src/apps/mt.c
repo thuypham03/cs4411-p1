@@ -43,7 +43,6 @@ typedef struct scheduler
 } scheduler;
 
 static scheduler *master;
-static int thread_id_counter = 0;
 static int debug = 0;
 
 void ctx_entry()
@@ -69,7 +68,6 @@ void thread_init()
 
 	master->current = malloc(sizeof(thread_t));
 	master->current->base = NULL;
-	master->current->id = thread_id_counter;
 	master->next = NULL;
 }
 
@@ -86,9 +84,6 @@ void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size)
 	master->next->base = malloc(stack_size);											 
 	master->next->sp = &master->next->base[stack_size];
 	master->next->state = RUNNING;
-
-	thread_id_counter++;
-	master->next->id = thread_id_counter;
 
 	// Switch from current to newly created thread (stack top = next->sp)
 	if (debug) sys_print("ctx_start()\n");
