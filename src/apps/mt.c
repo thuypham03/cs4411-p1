@@ -261,21 +261,21 @@ void test_producer_consumer() {
 /**
  * Test for philosopher
  */
-#define N 5 // Number of philosophers and forks
-sema_t forks[N];
+#define N_philo 5 // Number of philosophers and forks
+sema_t forks[N_philo];
 
 void philosopher(void *num) {
-    int i = (int)num;
+    int i = (int) num;
 
     for (int k = 0; k < 3; ++k) {
         // Think
         sema_dec(&forks[i]); // Pick up left fork
-        sema_dec(&forks[(i + 1) % N]); // Pick up right fork
+        sema_dec(&forks[(i + 1) % N_philo]); // Pick up right fork
 
 		printf("philosopher %d eats\n", i);
 
         sema_inc(&forks[i]); // Put down left fork
-        sema_inc(&forks[(i + 1) % N]); // Put down right fork
+        sema_inc(&forks[(i + 1) % N_philo]); // Put down right fork
 
 		thread_yield();
     }
@@ -283,19 +283,69 @@ void philosopher(void *num) {
 
 void test_philosopher() {
 	thread_init();
-    for (int i = 0; i < N; i++) {
+    for (int i = 0; i < N_philo; i++) {
         sema_init(&forks[i], 1);
     }
     // Create philosopher threads
-    for (int i = 0; i < N; i++) {
+    for (int i = 0; i < N_philo; i++) {
         thread_create(philosopher, (void *)i, 16 * 1024);
     }
+	thread_exit();
+}
+
+/**
+ * Test for barber
+ */
+#define N 1 // Maximum number of customers that can wait
+
+sema_t barberReady;
+sema_t accessWaiting;
+sema_t customerReady;
+int waiting = 0; // Number of customers waiting
+
+void barber(void *arg) {
+    for (;;) {
+        sema_dec(&customerReady); // Try to acquire a customer - if none, sleep
+        sema_dec(&accessWaiting); // Lock access to 'waiting'
+        waiting = waiting - 1; // Decrement count of waiting customers
+        sema_inc(&barberReady); // The barber is ready to cut hair
+		printf("The barber is cutting hair\n");
+        sema_inc(&accessWaiting); // Release 'waiting'
+    }
+}
+
+void customer(void *arg) {
+    sema_dec(&accessWaiting); // Lock access to 'waiting'
+    if (waiting < N) { // Check if there's room to wait
+        waiting = waiting + 1; // Increment count of waiting customers
+        printf("Customer %ld arrived and is waiting\n", (long) arg);
+        sema_inc(&customerReady); // Notify barber that a customer is ready
+        sema_inc(&accessWaiting); // Release 'waiting'
+        sema_dec(&barberReady); // Wait for the barber to be ready
+    } else {
+        printf("Customer %ld left because the waiting room is full\n", (long) arg);
+        sema_inc(&accessWaiting); // Release 'waiting'
+    }
+}
+
+void test_barber() {
+    thread_init();
+    sema_init(&barberReady, 0);
+    sema_init(&accessWaiting, 1);
+    sema_init(&customerReady, 0);
+
+    thread_create(barber, NULL, 16 * 1024);
+    for (long i = 1; i <= 10; i++) {
+        thread_create(customer, (void *) i, 16 * 1024);
+    }
+
 	thread_exit();
 }
 
 int main(int argc, char **argv){
 	// test_thread();
 	// test_producer_consumer();
-	test_philosopher();
+	// test_philosopher();
+	test_barber();
 	return 0;
 }
