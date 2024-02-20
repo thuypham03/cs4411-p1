@@ -177,6 +177,7 @@ bool sema_release(struct sema *sema) {
 }
 
 /**** TEST SUITE ****/
+
 /**
  * Test for thread scheduling
  */
@@ -202,7 +203,6 @@ void test_thread() {
 /**
  * Test for producer/consumer
  */
-
 #define NSLOTS 3
 
 static struct sema s_empty, s_full, s_lock;
@@ -258,8 +258,44 @@ void test_producer_consumer() {
 	thread_exit();
 }
 
+/**
+ * Test for philosopher
+ */
+#define N 5 // Number of philosophers and forks
+sema_t forks[N];
+
+void philosopher(void *num) {
+    int i = (int)num;
+
+    for (int k = 0; k < 3; ++k) {
+        // Think
+        sema_dec(&forks[i]); // Pick up left fork
+        sema_dec(&forks[(i + 1) % N]); // Pick up right fork
+
+		printf("philosopher %d eats\n", i);
+
+        sema_inc(&forks[i]); // Put down left fork
+        sema_inc(&forks[(i + 1) % N]); // Put down right fork
+
+		thread_yield();
+    }
+}
+
+void test_philosopher() {
+	thread_init();
+    for (int i = 0; i < N; i++) {
+        sema_init(&forks[i], 1);
+    }
+    // Create philosopher threads
+    for (int i = 0; i < N; i++) {
+        thread_create(philosopher, (void *)i, 16 * 1024);
+    }
+	thread_exit();
+}
+
 int main(int argc, char **argv){
 	// test_thread();
-	test_producer_consumer();
+	// test_producer_consumer();
+	test_philosopher();
 	return 0;
 }
