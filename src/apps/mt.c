@@ -95,7 +95,11 @@ void thread_yield()
 {
 	if (debug) sys_print("thread_yield()\n");
 
-	if (queue_empty(master->runnable_queue)) return;
+	if (queue_empty(master->runnable_queue)) {
+		if (master->current->state == BLOCKED || master->current->state == TERMINATED) exit(0);
+		else return;
+	}
+
 	if (master->current->state == RUNNING) {
 		master->current->state = RUNNABLE;
 		queue_add(master->runnable_queue, master->current);
@@ -173,26 +177,31 @@ bool sema_release(struct sema *sema) {
 }
 
 /**** TEST SUITE ****/
-// static void test_code(void *arg)
-// {
-// 	int i;
-// 	for (i = 0; i < 10; i++)
-// 	{
-// 		printf("%s here: %d\n", arg, i);
-// 		thread_yield();
-// 	}
-// 	printf("%s done\n", arg);
-// }
+/**
+ * Test for thread scheduling
+ */
+static void test_code(void *arg)
+{
+	int i;
+	for (i = 0; i < 10; i++)
+	{
+		printf("%s here: %d\n", arg, i);
+		thread_yield();
+	}
+	printf("%s done\n", arg);
+}
 
-// int main(int argc, char **argv)
-// {
-// 	thread_init();
-// 	thread_create(test_code, "thread 1", 16 * 1024);
-// 	thread_create(test_code, "thread 2", 16 * 1024);
-// 	test_code("main thread");
-// 	thread_exit();
-// 	return 0;
-// }
+void test_thread() {
+	thread_init();
+	thread_create(test_code, "thread 1", 16 * 1024);
+	thread_create(test_code, "thread 2", 16 * 1024);
+	test_code("main thread");
+	thread_exit();
+}
+
+/**
+ * Test for producer/consumer
+ */
 
 #define NSLOTS 3
 
@@ -209,7 +218,7 @@ static void producer(void *arg){
 		sema_dec(&s_lock);
 		slots[in++] = arg;
 		if (in == NSLOTS) in = 0;
-		printf("%s put\n", arg);
+		// printf("%s put\n", arg);
 		sema_inc(&s_lock);
 
 		// finally, signal consumers
@@ -235,7 +244,7 @@ static void consumer(void *arg){
 	}
 }
 
-int main(int argc, char **argv){
+void test_producer_consumer() {
 	thread_init();
 	sema_init(&s_lock, 1);
 	sema_init(&s_full, 0);
@@ -247,5 +256,10 @@ int main(int argc, char **argv){
 	producer("producer 2");
 	// Code should never reach here since producer is an infinite loop
 	thread_exit();
+}
+
+int main(int argc, char **argv){
+	// test_thread();
+	test_producer_consumer();
 	return 0;
 }
