@@ -71,6 +71,15 @@ void thread_init()
 	master->next = NULL;
 }
 
+void clean_up_zoombies() {
+	// Next thread clean up last thread
+	while (!queue_empty(master->terminated_queue)) {
+		thread_t *terminated_thread = (thread_t *) queue_get(master->terminated_queue);
+		free(terminated_thread->base);		
+		free((void *) terminated_thread);
+	}
+}
+
 void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size)
 {
 	if (debug) sys_print("thread_create()\n");
@@ -89,6 +98,7 @@ void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size)
 	if (debug) sys_print("ctx_start()\n");
 	ctx_start(&master->current->sp, master->next->sp);
 	master->current = master->next;
+	clean_up_zoombies();
 }
 
 void thread_yield()
@@ -111,13 +121,7 @@ void thread_yield()
 	if (debug) sys_print("ctx_switch()\n");
 	ctx_switch(&master->current->sp, master->next->sp);
 	master->current = master->next;
-
-	// Next thread clean up last thread
-	while (!queue_empty(master->terminated_queue)) {
-		thread_t *terminated_thread = (thread_t *) queue_get(master->terminated_queue);
-		free(terminated_thread->base);		
-		free((void *) terminated_thread);
-	}
+	clean_up_zoombies();
 }
 
 void thread_exit()
@@ -134,6 +138,7 @@ void thread_exit()
 	if (debug) sys_print("ctx_switch()\n");
 	ctx_switch(&master->current->sp, master->next->sp);
 	master->current = master->next;
+	clean_up_zoombies();
 }
 
 typedef struct sema {
