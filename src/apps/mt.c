@@ -290,6 +290,9 @@ void test_philosopher() {
     for (int i = 0; i < N_philo; i++) {
         thread_create(philosopher, (void *)i, 16 * 1024);
     }
+	for (int i = 0; i < N_philo; i++) {
+        sema_release(&forks[i]);
+    }
 	thread_exit();
 }
 
@@ -339,6 +342,9 @@ void test_barber() {
         thread_create(customer, (void *) i, 16 * 1024);
     }
 
+	sema_release(&barberReady);
+	sema_release(&accessWaiting);
+	sema_release(&customerReady);
 	thread_exit();
 }
 
