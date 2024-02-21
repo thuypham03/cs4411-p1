@@ -111,6 +111,13 @@ void thread_yield()
 	if (debug) sys_print("ctx_switch()\n");
 	ctx_switch(&master->current->sp, master->next->sp);
 	master->current = master->next;
+
+	// Next thread clean up last thread
+	while (!queue_empty(master->terminated_queue)) {
+		thread_t *terminated_thread = (thread_t *) queue_get(master->terminated_queue);
+		free(terminated_thread->base);		
+		free((void *) terminated_thread);
+	}
 }
 
 void thread_exit()
@@ -127,13 +134,6 @@ void thread_exit()
 	if (debug) sys_print("ctx_switch()\n");
 	ctx_switch(&master->current->sp, master->next->sp);
 	master->current = master->next;
-
-	// Next thread clean up last thread?
-	while (!queue_empty(master->terminated_queue)) {
-		thread_t *terminated_thread = (thread_t *) queue_get(master->terminated_queue);
-		free(terminated_thread->base);		
-		free((void *) terminated_thread);
-	}
 }
 
 typedef struct sema {
