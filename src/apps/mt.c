@@ -47,7 +47,7 @@ static int debug = 0;
 
 void ctx_entry()
 {
-	if (debug) sys_print("ctx_entry()\n");
+	if (debug) printf("ctx_entry()\n");
 
 	master->current = master->next;
 	master->current->state = RUNNING;
@@ -57,7 +57,7 @@ void ctx_entry()
 
 void thread_init()
 {
-	if (debug) sys_print("thread_init()\n");
+	if (debug) printf("thread_init()\n");
 
 	// Initialize threading package
 	master = malloc(sizeof(scheduler));
@@ -82,7 +82,7 @@ void clean_up_zombies() {
 
 void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size)
 {
-	if (debug) sys_print("thread_create()\n");
+	if (debug) printf("thread_create()\n");
 
 	master->current->state = RUNNABLE;
 	queue_add(master->runnable_queue, master->current);
@@ -95,7 +95,7 @@ void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size)
 	master->next->state = RUNNING;
 
 	// Switch from current to newly created thread (stack top = next->sp)
-	if (debug) sys_print("ctx_start()\n");
+	if (debug) printf("ctx_start()\n");
 	ctx_start(&master->current->sp, master->next->sp);
 	master->current = master->next;
 	clean_up_zombies();
@@ -103,7 +103,7 @@ void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size)
 
 void thread_yield()
 {
-	if (debug) sys_print("thread_yield()\n");
+	if (debug) printf("thread_yield()\n");
 
 	if (queue_empty(master->runnable_queue)) {
 		if (master->current->state == BLOCKED || master->current->state == TERMINATED) exit(0);
@@ -118,7 +118,7 @@ void thread_yield()
 	master->next = (thread_t *) queue_get(master->runnable_queue);
 	master->next->state = RUNNING;
 
-	if (debug) sys_print("ctx_switch()\n");
+	if (debug) printf("ctx_switch()\n");
 	ctx_switch(&master->current->sp, master->next->sp);
 	master->current = master->next;
 	clean_up_zombies();
@@ -126,7 +126,7 @@ void thread_yield()
 
 void thread_exit()
 {
-	if (debug) sys_print("thread_exit()\n");
+	if (debug) printf("thread_exit()\n");
 	if (queue_empty(master->runnable_queue)) exit(0);
 
 	master->current->state = TERMINATED;
@@ -135,7 +135,7 @@ void thread_exit()
 	master->next = (thread_t *) queue_get(master->runnable_queue);
 	master->next->state = RUNNING;
 
-	if (debug) sys_print("ctx_switch()\n");
+	if (debug) printf("ctx_switch()\n");
 	ctx_switch(&master->current->sp, master->next->sp);
 	master->current = master->next;
 	clean_up_zombies();
@@ -354,9 +354,9 @@ void test_barber() {
 }
 
 int main(int argc, char **argv){
-	// test_thread();
+	test_thread();
 	// test_producer_consumer();
 	// test_philosopher();
-	test_barber();
+	// test_barber();
 	return 0;
 }
