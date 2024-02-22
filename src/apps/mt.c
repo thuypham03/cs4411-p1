@@ -106,7 +106,13 @@ void thread_yield()
 	if (debug) printf("thread_yield()\n");
 
 	if (queue_empty(master->runnable_queue)) {
-		if (master->current->state == BLOCKED || master->current->state == TERMINATED) exit(0);
+		if (master->current->state == BLOCKED || master->current->state == TERMINATED) {
+			clean_up_zombies();
+			queue_release(master->runnable_queue);
+			queue_release(master->terminated_queue);
+			free(master);
+			exit(0);
+		}
 		else return;
 	}
 
@@ -127,10 +133,16 @@ void thread_yield()
 void thread_exit()
 {
 	if (debug) printf("thread_exit()\n");
-	if (queue_empty(master->runnable_queue)) exit(0);
-
 	master->current->state = TERMINATED;
 	queue_add(master->terminated_queue, master->current);
+
+	if (queue_empty(master->runnable_queue)) {
+		clean_up_zombies();
+		queue_release(master->runnable_queue);
+		queue_release(master->terminated_queue);
+		free(master);
+		exit(0);
+	}
 
 	master->next = (thread_t *) queue_get(master->runnable_queue);
 	master->next->state = RUNNING;
@@ -354,8 +366,8 @@ void test_barber() {
 }
 
 int main(int argc, char **argv){
-	test_thread();
-	// test_producer_consumer();
+	// test_thread();
+	test_producer_consumer();
 	// test_philosopher();
 	// test_barber();
 	return 0;
