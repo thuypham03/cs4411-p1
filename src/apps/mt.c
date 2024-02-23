@@ -258,6 +258,43 @@ bool sema_release(struct sema *sema)
 /**** TEST SUITE ****/
 
 /**
+ * Unit test
+ */
+
+// Helper function to validate thread states and scheduler integrity
+void validate_thread_state(thread_t *thread, thread_state expected_state) {
+    assert(thread != NULL);
+    assert(thread->state == expected_state);
+}
+
+void test_thread_init() {
+    assert(master != NULL);
+    assert(master->runnable_queue != NULL);
+    assert(master->terminated_queue != NULL);
+    assert(queue_empty(master->runnable_queue));
+    assert(queue_empty(master->terminated_queue));
+    printf("test_thread_init passed\n");
+}
+
+void increase_counter(int *i) {
+	*i += 1;
+}
+
+void test_thread_create() {
+	int counter = 0;
+    thread_create(increase_counter, &counter, 1024);
+	assert(counter == 1);
+    printf("test_thread_create passed\n");
+}
+
+void unit_test() {
+    thread_init();
+    test_thread_init();
+    test_thread_create();
+	thread_exit();
+}
+
+/**
  * Test for thread scheduling
  */
 static void test_code(void *arg)
@@ -456,7 +493,8 @@ void test_barber()
 
 int main(int argc, char **argv)
 {
-	test_thread();
+	unit_test();
+	// test_thread();
 	// test_producer_consumer();
 	// test_philosopher();
 	// test_barber();
