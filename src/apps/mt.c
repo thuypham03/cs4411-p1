@@ -341,7 +341,11 @@ void test_producer_consumer()
 	thread_create(consumer, "consumer 2", 16 * 1024);
 	producer("producer 1");
 	producer("producer 2");
+
 	// Code should never reach here since producer is an infinite loop
+	sema_release(&s_lock);
+	sema_release(&s_full);
+	sema_release(&s_empty);
 	thread_exit();
 }
 
@@ -443,6 +447,7 @@ void test_barber()
 		thread_create(customer, (void *)i, 16 * 1024);
 	}
 
+	// Code should never reach here since baber is an infinite loop
 	sema_release(&barberReady);
 	sema_release(&accessWaiting);
 	sema_release(&customerReady);
