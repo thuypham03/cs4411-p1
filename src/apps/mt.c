@@ -419,8 +419,8 @@ void test_barber()
 int main(int argc, char **argv)
 {
 	// test_thread();
-	// test_producer_consumer();
+	test_producer_consumer();
 	// test_philosopher();
-	test_barber();
+	// test_barber();
 	return 0;
 }
