@@ -217,6 +217,7 @@ bool sema_release(struct sema *sema)
 	if (queue_empty(sema->waiting_queue))
 	{
 		queue_release(sema->waiting_queue);
+		free(sema->waiting_queue);
 		return true;
 	}
 	return false;
