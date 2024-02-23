@@ -119,6 +119,8 @@ void thread_yield()
 			clean_up_zombies();
 			queue_release(master->runnable_queue);
 			queue_release(master->terminated_queue);
+			free(master->runnable_queue);
+			free(master->terminated_queue);
 			free(master);
 			exit(0);
 		}
@@ -417,8 +419,8 @@ void test_barber()
 int main(int argc, char **argv)
 {
 	// test_thread();
-	test_producer_consumer();
+	// test_producer_consumer();
 	// test_philosopher();
-	// test_barber();
+	test_barber();
 	return 0;
 }
