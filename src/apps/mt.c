@@ -16,42 +16,49 @@ void thread_yield();
 void thread_exit();
 
 /**** THREADS AND SEMAPHORES ****/
+
+// Define possible states for a thread
 typedef enum state
 {
-	RUNNABLE,
-	RUNNING,
-	BLOCKED,
-	TERMINATED
+    RUNNABLE,    // Ready to run 
+    RUNNING,     // Currently running
+    BLOCKED,     // Waiting for an event or resource
+    TERMINATED   // Finished execution
 } thread_state;
 
+// Thread structure, representing each thread in the system
 typedef struct thread
 {
-	address_t sp;
-	char *base;
-	thread_state state;
+    address_t sp;         // Stack pointer for context switching
+    char *base;           // Base address of the stack
+    thread_state state;   // Current state of the thread
 
-	void (*f)(void *arg);
-	void *arg;
+    void (*f)(void *arg); // Function to run in the thread
+    void *arg;            // Argument to the function
 } thread_t;
 
+// Scheduler structure, managing threads and scheduling
 typedef struct scheduler
 {
-	thread_t *current;
-	thread_t *next;
-	struct queue *runnable_queue;
-	struct queue *terminated_queue;
+    thread_t *current;               // Currently running thread
+    thread_t *next;                  // Next thread to run
+    struct queue *runnable_queue;    // Queue of runnable threads
+    struct queue *terminated_queue;  // Queue of terminated threads
 } scheduler;
 
-static scheduler *master;
-static int debug = 0;
+static scheduler *master; // Global scheduler instance
+static int debug = 0;     // Debug flag for logging
 
 void ctx_entry()
 {
 	if (debug)
 		printf("ctx_entry()\n");
 
+    // Set the current thread to the next one and mark it as running
 	master->current = master->next;
 	master->current->state = RUNNING;
+
+	// Execute the thread function
 	master->current->f(master->current->arg);
 	thread_exit();
 }
@@ -61,21 +68,23 @@ void thread_init()
 	if (debug)
 		printf("thread_init()\n");
 
-	// Initialize threading package
+    // Allocate and initialize the master scheduler and its queues
 	master = malloc(sizeof(scheduler));
 	master->runnable_queue = malloc(sizeof(struct queue));
 	queue_init(master->runnable_queue);
 	master->terminated_queue = malloc(sizeof(struct queue));
 	queue_init(master->terminated_queue);
 
+    // Allocate a dummy current thread (needed for the first thread_create call)
 	master->current = malloc(sizeof(thread_t));
 	master->current->base = NULL;
 	master->next = NULL;
 }
 
+// Clean up resources used by terminated threads
 void clean_up_zombies()
 {
-	// Next thread clean up last thread
+    // Freeing resources for each terminated thread
 	while (!queue_empty(master->terminated_queue))
 	{
 		thread_t *terminated_thread = (thread_t *)queue_get(master->terminated_queue);
@@ -89,12 +98,15 @@ void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size)
 	if (debug)
 		printf("thread_create()\n");
 
+    // Mark the current thread as runnable and add it to the runnable queue
 	master->current->state = RUNNABLE;
 	queue_add(master->runnable_queue, master->current);
 
+    // Allocate and initialize the next thread
 	master->next = malloc(sizeof(thread_t));
 	master->next->f = f;
 	master->next->arg = arg;
+	// Allocate stack memory and set the stack pointer
 	master->next->base = malloc(stack_size);
 	master->next->sp = (address_t)&master->next->base[stack_size];
 	master->next->state = RUNNING;
@@ -104,6 +116,8 @@ void thread_create(void (*f)(void *arg), void *arg, unsigned int stack_size)
 		printf("ctx_start()\n");
 	ctx_start(&master->current->sp, master->next->sp);
 	master->current = master->next;
+
+	// After the switch, clean up any terminated threads
 	clean_up_zombies();
 }
 
@@ -112,10 +126,12 @@ void thread_yield()
 	if (debug)
 		printf("thread_yield()\n");
 
+    // If no threads are runnable, check for termination conditions
 	if (queue_empty(master->runnable_queue))
 	{
 		if (master->current->state == BLOCKED || master->current->state == TERMINATED)
 		{
+			// If the current thread is not runnable, clean up and exit
 			clean_up_zombies();
 			queue_release(master->runnable_queue);
 			queue_release(master->terminated_queue);
@@ -125,15 +141,17 @@ void thread_yield()
 			exit(0);
 		}
 		else
-			return;
+			return; // If the current thread is still runnable, do nothing
 	}
 
+    // If the current thread is running, make it runnable again
 	if (master->current->state == RUNNING)
 	{
 		master->current->state = RUNNABLE;
 		queue_add(master->runnable_queue, master->current);
 	}
 
+    // Switch to the next runnable thread
 	master->next = (thread_t *)queue_get(master->runnable_queue);
 	master->next->state = RUNNING;
 
@@ -141,6 +159,8 @@ void thread_yield()
 		printf("ctx_switch()\n");
 	ctx_switch(&master->current->sp, master->next->sp);
 	master->current = master->next;
+
+	// Clean up any terminated threads after switching
 	clean_up_zombies();
 }
 
@@ -148,9 +168,12 @@ void thread_exit()
 {
 	if (debug)
 		printf("thread_exit()\n");
+
+    // Mark the current thread as terminated and add it to the terminated queue
 	master->current->state = TERMINATED;
 	queue_add(master->terminated_queue, master->current);
 
+    // If no threads are runnable, clean up and exit
 	if (queue_empty(master->runnable_queue))
 	{
 		clean_up_zombies();
@@ -162,6 +185,7 @@ void thread_exit()
 		exit(0);
 	}
 
+    // Switch to the next runnable thread
 	master->next = (thread_t *)queue_get(master->runnable_queue);
 	master->next->state = RUNNING;
 
@@ -169,17 +193,20 @@ void thread_exit()
 		printf("ctx_switch()\n");
 	ctx_switch(&master->current->sp, master->next->sp);
 	master->current = master->next;
+
+	// Clean up any terminated threads after switching
 	clean_up_zombies();
 }
 
 typedef struct sema
 {
-	unsigned int count;
-	struct queue *waiting_queue;
+    unsigned int count;          // Counter to track the semaphore's value
+    struct queue *waiting_queue; // Queue of threads waiting on this semaphore
 } sema_t;
 
 void sema_init(struct sema *sema, unsigned int count)
 {
+	// Initialize value and empty waiting queue
 	sema->count = count;
 	sema->waiting_queue = malloc(sizeof(struct queue));
 	queue_init(sema->waiting_queue);
@@ -189,6 +216,7 @@ void sema_dec(struct sema *sema)
 {
 	if (sema->count > 0)
 	{
+		// Decrement the count if it's positive
 		sema->count--;
 		return;
 	}
@@ -196,6 +224,8 @@ void sema_dec(struct sema *sema)
 	// Block the thread and add it to the semaphore's wait queue
 	master->current->state = BLOCKED;
 	queue_add(sema->waiting_queue, master->current);
+
+	// Yield control, as the current thread is now blocked
 	thread_yield();
 }
 
@@ -209,6 +239,7 @@ void sema_inc(struct sema *sema)
 		queue_add(master->runnable_queue, unblock_thread);
 	}
 	else
+		// If no threads are waiting, increment the count
 		sema->count++;
 }
 
@@ -216,6 +247,7 @@ bool sema_release(struct sema *sema)
 {
 	if (queue_empty(sema->waiting_queue))
 	{
+        // If no threads are waiting, free the waiting queue and return true
 		queue_release(sema->waiting_queue);
 		free(sema->waiting_queue);
 		return true;
@@ -383,8 +415,8 @@ void barber(void *arg)
 void customer(void *arg)
 {
 	sema_dec(&accessWaiting); // Lock access to 'waiting'
-	if (waiting < N)
-	{												 // Check if there's room to wait
+	if (waiting < N) // Check if there's room to wait
+	{												 
 		waiting = waiting + 1; // Increment count of waiting customers
 		printf("Customer %ld arrived and is waiting\n", (long)arg);
 		sema_inc(&customerReady); // Notify barber that a customer is ready
@@ -419,8 +451,8 @@ void test_barber()
 
 int main(int argc, char **argv)
 {
-	// test_thread();
-	test_producer_consumer();
+	test_thread();
+	// test_producer_consumer();
 	// test_philosopher();
 	// test_barber();
 	return 0;
