@@ -134,8 +134,8 @@ void thread_yield()
 			// If the current thread is not runnable, clean up and exit
 			clean_up_zombies();
 			queue_release(master->runnable_queue);
-			queue_release(master->terminated_queue);
 			free(master->runnable_queue);
+			queue_release(master->terminated_queue);
 			free(master->terminated_queue);
 			free(master);
 			exit(0);
@@ -178,8 +178,8 @@ void thread_exit()
 	{
 		clean_up_zombies();
 		queue_release(master->runnable_queue);
-		queue_release(master->terminated_queue);
 		free(master->runnable_queue);
+		queue_release(master->terminated_queue);
 		free(master->terminated_queue);
 		free(master);
 		exit(0);
