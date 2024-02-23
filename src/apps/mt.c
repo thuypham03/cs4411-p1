@@ -140,6 +140,8 @@ void thread_exit()
 		clean_up_zombies();
 		queue_release(master->runnable_queue);
 		queue_release(master->terminated_queue);
+		free(master -> runnable_queue);
+		free(master -> terminated_queue);
 		free(master);
 		exit(0);
 	}
