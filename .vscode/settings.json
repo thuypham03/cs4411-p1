@@ -1,6 +1,7 @@
 {
-    "files.associations": {
-        "queue.h": "c",
-        "context.h": "c"
-    }
+  "files.associations": {
+    "queue.h": "c",
+    "context.h": "c",
+    "atomic": "c"
+  }
 }
