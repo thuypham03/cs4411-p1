@@ -277,6 +277,7 @@ void thread_test1()
 		printf("thread_init() failed\n");
 		exit(1);
 	}
+	printf("finish thread_test1()\n");
 	thread_exit();
 }
 
@@ -297,6 +298,8 @@ void thread_test2()
 		printf("thread_create() failed\n");
 		exit(1);
 	}
+
+	printf("finish thread_test2()\n");
 	thread_exit();
 }
 
@@ -305,6 +308,7 @@ static sema_t lock;
 // Tests sema_init() and sema_release()
 void sema_test1()
 {
+	thread_init();
 	sema_init(&lock, 1);
 	thread_t *mock_thread = malloc(sizeof(thread_t));
 
@@ -320,6 +324,10 @@ void sema_test1()
 		printf("sema_release() did not release when should\n");
 		exit(1);
 	}
+
+	free(mock_thread);
+	printf("finish sema_test1()\n");
+	thread_exit();
 }
 
 // Tests sema_inc() and sema_dec()
@@ -334,7 +342,8 @@ void sema_test2()
 		printf("sema_release() did not release when should\n");
 		exit(1);
 	}
-	printf("passed sema_test2()\n");
+	printf("finish sema_test2()\n");
+	thread_exit();
 }
 
 /**
