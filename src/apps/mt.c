@@ -275,7 +275,7 @@ void thread_test1()
 	if (master == NULL || master->current == NULL || master->runnable_queue == NULL || master->terminated_queue == NULL)
 	{
 		printf("thread_init() failed\n");
-		sys_exit(1);
+		exit(1);
 	}
 	thread_exit();
 }
@@ -287,7 +287,7 @@ void thread_test2()
 	if (master->current == NULL || master->runnable_queue == NULL || master->terminated_queue == NULL)
 	{
 		printf("thread_init() failed\n");
-		sys_exit(1);
+		exit(1);
 	}
 
 	thread_create(incr, &zero, 16 * 1024);
@@ -295,7 +295,7 @@ void thread_test2()
 	if (did_thread_run[0] == 0 || did_thread_run[1] == 0)
 	{
 		printf("thread_create() failed\n");
-		sys_exit(1);
+		exit(1);
 	}
 	thread_exit();
 }
@@ -311,14 +311,14 @@ void sema_test1()
 	queue_add((&lock)->waiting_queue, mock_thread); // obtain lock on queue
 	if (sema_release(&lock))
 	{
-		sys_print("sema_release() released when shouldn't\n");
-		sys_exit(1);
+		printf("sema_release() released when shouldn't\n");
+		exit(1);
 	}
 	queue_get((&lock)->waiting_queue); // release lock from queue
 	if (!sema_release(&lock))
 	{
-		sys_print("sema_release() did not release when should\n");
-		sys_exit(1);
+		printf("sema_release() did not release when should\n");
+		exit(1);
 	}
 }
 
@@ -331,10 +331,10 @@ void sema_test2()
 	thread_create(sema_inc, &lock, 1024 * 16);
 	if (!sema_release(&lock))
 	{
-		sys_print("sema_release() did not release when should\n");
-		sys_exit(1);
+		printf("sema_release() did not release when should\n");
+		exit(1);
 	}
-	sys_print("passed sema_test2()\n");
+	printf("passed sema_test2()\n");
 }
 
 /**
